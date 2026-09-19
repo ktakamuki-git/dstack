@@ -67,7 +67,8 @@
     "instances": "インスタンス",
     "offers": "オファー",
     "events": "イベント",
-    "presets": "プリセット"
+    "presets": "プリセット",
+    "hf_model_management": "HFモデル管理"
   },
   "projects": {
     "page_title": "プロジェクト",

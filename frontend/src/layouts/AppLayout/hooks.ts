@@ -32,7 +32,7 @@ export const useSideNavigation = () => {
         { type: 'link', text: t('navigation.models'), href: ROUTES.MODELS.LIST },
         {
             type: 'link',
-            text: 'HFモデル管理',
+            text: t('navigation.hf_model_management'),
             href: hfModelManagementUrl,
             external: true,
         },
