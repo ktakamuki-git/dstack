@@ -44,7 +44,7 @@ const getInitialState = (): IAppState => {
     applyMode(activeMode);
 
     if (storageData) authData = JSON.parse(storageData) as IUserAuthData;
-    if (!authData && process.env.LOCAL_AUTH_TOKEN) {
+    if (process.env.LOCAL_AUTH_TOKEN) {
         authData = { token: process.env.LOCAL_AUTH_TOKEN };
     }
 
