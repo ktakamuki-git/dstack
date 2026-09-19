@@ -21,6 +21,7 @@ export const useSideNavigation = () => {
     const isPoolDetails = Boolean(useMatch(ROUTES.FLEETS.DETAILS.TEMPLATE));
     const billingUrl = ROUTES.USER.BILLING.LIST.FORMAT(userName);
     const userProjectsUrl = ROUTES.USER.PROJECTS.FORMAT(userName);
+    const hfModelManagementUrl = `http://${window.location.hostname}:25001/hf-models`;
 
     const generalLinks = [
         { type: 'link', text: t('navigation.runs'), href: ROUTES.RUNS.LIST },
@@ -29,6 +30,12 @@ export const useSideNavigation = () => {
         { type: 'link', text: t('navigation.instances'), href: ROUTES.INSTANCES.LIST },
         { type: 'link', text: t('navigation.volumes'), href: ROUTES.VOLUMES.LIST },
         { type: 'link', text: t('navigation.models'), href: ROUTES.MODELS.LIST },
+        {
+            type: 'link',
+            text: 'HFモデル管理',
+            href: hfModelManagementUrl,
+            external: true,
+        },
         process.env.UI_VERSION === 'sky' && { type: 'link', text: t('navigation.presets'), href: ROUTES.PRESETS.LIST },
         (process.env.UI_VERSION === 'factory' || process.env.UI_VERSION === 'sky') && {
             type: 'link',
