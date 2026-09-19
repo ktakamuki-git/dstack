@@ -12,6 +12,7 @@ const env = {
     API_URL: JSON.stringify(apiUrl),
     UI_VERSION: JSON.stringify(uiVersion),
     GA_MEASUREMENT_ID: JSON.stringify(gaMeasurementId),
+    LOCAL_AUTH_TOKEN: JSON.stringify(process.env.LOCAL_AUTH_TOKEN || ''),
 };
 
 const sourceMap = !isProd;

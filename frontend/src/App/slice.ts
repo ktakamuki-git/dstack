@@ -44,6 +44,9 @@ const getInitialState = (): IAppState => {
     applyMode(activeMode);
 
     if (storageData) authData = JSON.parse(storageData) as IUserAuthData;
+    if (!authData && process.env.LOCAL_AUTH_TOKEN) {
+        authData = { token: process.env.LOCAL_AUTH_TOKEN };
+    }
 
     return {
         authData,
@@ -100,10 +103,14 @@ export const appSlice = createSlice({
         },
 
         removeAuthData: (state) => {
-            state.authData = null;
+            state.authData = process.env.LOCAL_AUTH_TOKEN ? { token: process.env.LOCAL_AUTH_TOKEN } : null;
 
             try {
-                localStorage.removeItem(AUTH_DATA_STORAGE_KEY);
+                if (process.env.LOCAL_AUTH_TOKEN) {
+                    localStorage.setItem(AUTH_DATA_STORAGE_KEY, JSON.stringify(state.authData));
+                } else {
+                    localStorage.removeItem(AUTH_DATA_STORAGE_KEY);
+                }
             } catch (e) {
                 console.log(e);
             }

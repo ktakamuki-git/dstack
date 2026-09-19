@@ -33,6 +33,7 @@ declare namespace NodeJS {
         readonly UI_VERSION: 'sky' | 'factory' | 'oss';
         readonly PUBLIC_URL: string;
         readonly API_URL: string;
+        readonly LOCAL_AUTH_TOKEN: string;
     }
 }
 
