@@ -1,4 +1,5 @@
 import React from 'react';
+import { Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { colorBackgroundHomeHeader } from '@cloudscape-design/design-tokens';
 
@@ -11,6 +12,10 @@ import { SelfHostedLogin } from '../SelfHostedLogin';
 
 export const TokenLogin: React.FC = () => {
     const { t } = useTranslation();
+
+    if (process.env.LOCAL_AUTH_TOKEN) {
+        return <Navigate replace to={ROUTES.RUNS.LIST} />;
+    }
 
     if (process.env.UI_VERSION === 'sky') {
         return (
