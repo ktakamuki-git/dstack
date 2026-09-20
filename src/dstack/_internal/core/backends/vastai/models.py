@@ -1,7 +1,9 @@
 from typing import Annotated, List, Literal, Optional, Union
 
-from pydantic import Field
+from pydantic import Field, model_validator
+from typing_extensions import Self
 
+from dstack._internal.core.backends.base.models import fill_data
 from dstack._internal.core.models.common import CoreModel
 
 # TODO: Re-evaluate this default once Vast Server Cloud inventory improves for
@@ -16,6 +18,30 @@ class VastAIAPIKeyCreds(CoreModel):
 
 AnyVastAICreds = VastAIAPIKeyCreds
 VastAICreds = AnyVastAICreds
+
+
+class VastAIAPIKeyFileCreds(CoreModel):
+    type: Annotated[Literal["api_key"], Field(description="The type of credentials")] = "api_key"
+    filename: Annotated[
+        str, Field(description="The path to the Vast.ai API key file", exclude=True)
+    ]
+    api_key: Annotated[
+        Optional[str],
+        Field(
+            description=(
+                "The Vast.ai API key."
+                " When configuring via server/config.yml, it's automatically filled from filename."
+                " When configuring via UI, it has to be specified explicitly"
+            )
+        ),
+    ] = None
+
+    @model_validator(mode="after")
+    def fill_api_key(self) -> Self:
+        return fill_data(self, filename_field="filename", data_field="api_key")
+
+
+AnyVastAIFileCreds = VastAIAPIKeyFileCreds
 
 
 class VastAIBackendConfig(CoreModel):
@@ -37,6 +63,10 @@ class VastAIBackendConfig(CoreModel):
 
 class VastAIBackendConfigWithCreds(VastAIBackendConfig):
     creds: Annotated[AnyVastAICreds, Field(description="The credentials")]
+
+
+class VastAIBackendFileConfigWithCreds(VastAIBackendConfig):
+    creds: Annotated[AnyVastAIFileCreds, Field(description="The credentials")]
 
 
 AnyVastAIBackendConfig = Union[VastAIBackendConfig, VastAIBackendConfigWithCreds]

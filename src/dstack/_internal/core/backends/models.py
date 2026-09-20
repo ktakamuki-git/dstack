@@ -84,6 +84,7 @@ from dstack._internal.core.backends.tensordock.models import (
 from dstack._internal.core.backends.vastai.models import (
     VastAIBackendConfig,
     VastAIBackendConfigWithCreds,
+    VastAIBackendFileConfigWithCreds,
 )
 from dstack._internal.core.backends.verda.models import (
     VerdaBackendConfig,
@@ -186,7 +187,7 @@ AnyBackendFileConfigWithCreds = Union[
     RunpodBackendConfigWithCreds,
     SeewebBackendConfigWithCreds,
     TensorDockBackendConfigWithCreds,
-    VastAIBackendConfigWithCreds,
+    VastAIBackendFileConfigWithCreds,
     VultrBackendConfigWithCreds,
     SlurmBackendFileConfigWithCreds,
 ]

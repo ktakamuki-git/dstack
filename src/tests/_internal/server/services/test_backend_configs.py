@@ -55,6 +55,42 @@ class TestCrusoeBackendConfig:
         assert backend_cfg.creds.secret_key == "test-secret-key"
 
 
+class TestVastAIBackendConfig:
+    def test_with_api_key_filename(self, tmp_path: Path):
+        api_key_file = tmp_path / "vast-api-key"
+        api_key_file.write_text("test-vast-api-key")
+
+        config_yaml_path = tmp_path / "config.yml"
+        config_dict = {
+            "projects": [
+                {
+                    "name": "main",
+                    "backends": [
+                        {
+                            "type": "vastai",
+                            "creds": {
+                                "type": "api_key",
+                                "filename": str(api_key_file),
+                            },
+                        }
+                    ],
+                }
+            ]
+        }
+        config_yaml_path.write_text(yaml.dump(config_dict))
+
+        with patch.object(settings, "SERVER_DIR_PATH", tmp_path):
+            m = ServerConfigManager()
+            assert m.load_config()
+            assert m.config is not None
+            assert m.config.projects[0].backends is not None
+            backend_file_cfg = m.config.projects[0].backends[0]
+            backend_cfg = file_config_to_config(backend_file_cfg)
+
+        assert backend_cfg.type == "vastai"
+        assert backend_cfg.creds.api_key == "test-vast-api-key"
+
+
 class TestNebiusBackendConfig:
     def test_with_filename(self, tmp_path: Path):
         creds_json = {
