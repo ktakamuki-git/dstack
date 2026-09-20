@@ -1,5 +1,7 @@
 import io
 import json
+import re
+import shlex
 import time
 from contextlib import contextmanager, nullcontext
 from textwrap import dedent
@@ -38,6 +40,9 @@ logger = get_logger(__name__)
 SSH_CONNECT_TIMEOUT = 10
 
 DSTACK_SHIM_ENV_FILE = "shim.env"
+DSTACK_SHIM_SHELL_ENV_FILE = "shim.env.sh"
+DSTACK_SHIM_PID_FILE = "shim.pid"
+DSTACK_SHIM_LOG_FILE = "shim.log"
 
 HOST_INFO_FILE = "host_info.json"
 
@@ -90,6 +95,35 @@ def upload_envs(client: paramiko.SSHClient, working_dir: str, envs: Dict[str, st
             )
     except (paramiko.SSHException, OSError) as e:
         raise SSHProvisioningError(f"upload_envs failed: {e}") from e
+
+
+def upload_shell_envs(
+    client: paramiko.SSHClient, working_dir: str, envs: Dict[str, str]
+) -> None:
+    shell_env_lines = []
+    for key, value in envs.items():
+        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key) is None:
+            raise SSHProvisioningError(f"Invalid environment variable name: {key}")
+        shell_env_lines.append(f"export {key}={shlex.quote(value.strip())}")
+    shell_env = "\n".join(shell_env_lines)
+    tmp_path = f"/tmp/{DSTACK_SHIM_SHELL_ENV_FILE}"
+    dest = f"{working_dir}/{DSTACK_SHIM_SHELL_ENV_FILE}"
+    sftp_upload(client, tmp_path, shell_env)
+    try:
+        cmd = (
+            f"sudo mv {tmp_path} {dest}"
+            f" && sudo chmod 600 {dest}"
+            f" && {{ sudo chcon system_u:object_r:etc_t:s0 {dest} 2>/dev/null || true; }}"
+        )
+        _, stdout, stderr = client.exec_command(cmd, timeout=20)
+        out = stdout.read().strip().decode()
+        err = stderr.read().strip().decode()
+        if out or err:
+            raise SSHProvisioningError(
+                f"The command 'upload_shell_envs' didn't work. stdout: {out}, stderr: {err}"
+            )
+    except (paramiko.SSHException, OSError) as e:
+        raise SSHProvisioningError(f"upload_shell_envs failed: {e}") from e
 
 
 def add_authorized_keys(client: paramiko.SSHClient, authorized_keys: list[str]) -> None:
@@ -167,6 +201,108 @@ def run_shim_as_systemd_service(
             )
     except (paramiko.SSHException, OSError) as e:
         raise SSHProvisioningError(f"run_shim_as_systemd failed: {e}") from e
+
+
+def _systemd_is_init(client: paramiko.SSHClient) -> bool:
+    cmd = (
+        'if [ "$(cat /proc/1/comm 2>/dev/null)" = systemd ] '
+        "&& command -v systemctl >/dev/null 2>&1; then printf systemd; else printf background; fi"
+    )
+    try:
+        _, stdout, stderr = client.exec_command(cmd, timeout=10)
+        out = stdout.read().strip().decode()
+        err = stderr.read().strip().decode()
+    except (paramiko.SSHException, OSError) as e:
+        raise SSHProvisioningError(f"detecting init system failed: {e}") from e
+    if err:
+        raise SSHProvisioningError(
+            f"detecting init system failed. stdout: {out}, stderr: {err}"
+        )
+    return out == "systemd"
+
+
+def run_shim_as_background_process(
+    client: paramiko.SSHClient, binary_path: str, working_dir: str
+) -> None:
+    shell_env = f"{working_dir}/{DSTACK_SHIM_SHELL_ENV_FILE}"
+    pid_file = f"{working_dir}/{DSTACK_SHIM_PID_FILE}"
+    log_file = f"{working_dir}/{DSTACK_SHIM_LOG_FILE}"
+    supervisor = dedent(
+        f"""\
+        . {shlex.quote(shell_env)}
+        child=
+        trap 'if [ -n "$child" ]; then kill "$child" 2>/dev/null || true; wait "$child" 2>/dev/null || true; fi; exit 0' TERM INT
+        while true; do
+            {shlex.quote(binary_path)} &
+            child=$!
+            wait "$child" || true
+            child=
+            sleep {DSTACK_SHIM_RESTART_INTERVAL_SECONDS}
+        done
+        """
+    )
+    script = dedent(
+        f"""\
+        set -eu
+        binary={shlex.quote(binary_path)}
+        pid_file={shlex.quote(pid_file)}
+        if [ -f "$pid_file" ]; then
+            old_pid=$(cat "$pid_file" 2>/dev/null || true)
+            if [ -n "$old_pid" ] && kill -0 "$old_pid" 2>/dev/null; then
+                if tr '\0' ' ' < "/proc/$old_pid/cmdline" | grep -F -- "$binary" >/dev/null 2>&1; then
+                    kill "$old_pid"
+                    i=0
+                    while kill -0 "$old_pid" 2>/dev/null && [ "$i" -lt 20 ]; do
+                        sleep 0.1
+                        i=$((i + 1))
+                    done
+                fi
+            fi
+        fi
+        nohup sh -c {shlex.quote(supervisor)} > {shlex.quote(log_file)} 2>&1 < /dev/null &
+        new_pid=$!
+        printf '%s\n' "$new_pid" > "$pid_file"
+        sleep 1
+        kill -0 "$new_pid"
+        """
+    )
+    try:
+        _, stdout, stderr = client.exec_command(
+            f"sudo sh -c {shlex.quote(script)}", timeout=20
+        )
+        out = stdout.read().strip().decode()
+        err = stderr.read().strip().decode()
+        exit_status = stdout.channel.recv_exit_status()
+        if exit_status != 0 or out or err:
+            raise SSHProvisioningError(
+                "The command 'run_shim_as_background_process' didn't work. "
+                f"exit_status: {exit_status}, stdout: {out}, stderr: {err}"
+            )
+    except (paramiko.SSHException, OSError) as e:
+        raise SSHProvisioningError(f"run_shim_as_background_process failed: {e}") from e
+
+
+def run_shim(
+    client: paramiko.SSHClient,
+    binary_path: str,
+    working_dir: str,
+    envs: Dict[str, str],
+    dev: bool,
+) -> None:
+    if _systemd_is_init(client):
+        run_shim_as_systemd_service(
+            client=client,
+            binary_path=binary_path,
+            working_dir=working_dir,
+            dev=dev,
+        )
+    else:
+        upload_shell_envs(client=client, working_dir=working_dir, envs=envs)
+        run_shim_as_background_process(
+            client=client,
+            binary_path=binary_path,
+            working_dir=working_dir,
+        )
 
 
 def check_dstack_shim_service(client: paramiko.SSHClient):

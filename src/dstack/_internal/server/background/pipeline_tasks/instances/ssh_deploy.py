@@ -51,7 +51,7 @@ from dstack._internal.server.services.ssh_fleets.provisioning import (
     remove_dstack_runner_if_exists,
     remove_host_info_if_exists,
     run_pre_start_commands,
-    run_shim_as_systemd_service,
+    run_shim,
     upload_envs,
 )
 from dstack._internal.utils.common import get_current_datetime, get_or_error, run_async
@@ -284,11 +284,12 @@ def _deploy_instance(
         remove_host_info_if_exists(client, dstack_working_dir)
         remove_dstack_runner_if_exists(client, dstack_runner_binary_path)
 
-        # Run dstack-shim as a systemd service
-        run_shim_as_systemd_service(
+        # Run dstack-shim using systemd when available, otherwise use a detached supervisor.
+        run_shim(
             client=client,
             binary_path=dstack_shim_binary_path,
             working_dir=dstack_working_dir,
+            envs=shim_envs,
             dev=settings.DSTACK_VERSION is None,
         )
 
