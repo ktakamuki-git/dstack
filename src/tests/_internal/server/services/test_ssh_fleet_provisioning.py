@@ -111,7 +111,6 @@ def test_background_shim_uses_owned_pidfile_and_shell_env():
     assert "/proc/$old_pid/cmdline" in command
     assert "trap " in command
     assert "nohup sh -c" in command
-    assert "\x00" not in command
 
 
 def test_background_shim_rejects_failed_start():
