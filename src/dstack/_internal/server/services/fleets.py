@@ -11,13 +11,11 @@ from sqlalchemy.orm import aliased, joinedload, selectinload
 
 from dstack._internal.core.backends.base.backend import Backend
 from dstack._internal.core.backends.features import BACKENDS_WITH_CREATE_INSTANCE_SUPPORT
-from dstack._internal.core.backends.vastai.api_client import VastAIAPIClient, VastAIRateLimitError
 from dstack._internal.core.errors import (
     ForbiddenError,
     ResourceExistsError,
     ServerClientError,
 )
-from dstack._internal.core.models.backends.base import BackendType
 from dstack._internal.core.models.common import ApplyAction, CoreModel, validate_json_extra_ignore
 from dstack._internal.core.models.envs import Env
 from dstack._internal.core.models.fleets import (
@@ -68,7 +66,6 @@ from dstack._internal.server.models import (
     RunModel,
     UserModel,
 )
-from dstack._internal.server.services import backends as backends_services
 from dstack._internal.server.services import events
 from dstack._internal.server.services import instances as instances_services
 from dstack._internal.server.services import offers as offers_services
@@ -99,7 +96,6 @@ from dstack._internal.utils.common import (
     EntityNameOrID,
     get_current_datetime,
     get_lowest_unused_nums,
-    run_async,
 )
 from dstack._internal.utils.logging import get_logger
 
@@ -649,99 +645,6 @@ async def apply_plan(
         project=project,
         user=user,
         spec=spec,
-        pipeline_hinter=pipeline_hinter,
-    )
-
-
-async def register_vast_instance(
-    session: AsyncSession,
-    user: UserModel,
-    project: ProjectModel,
-    instance_id: int,
-    fleet_name: Optional[str],
-    pipeline_hinter: PipelineHinterProtocol,
-) -> Fleet:
-    """Register an already-rented Vast.ai instance as an SSH fleet.
-
-    The existing Vast.ai backend credentials are used to resolve the instance and
-    the project SSH key is attached to the instance through Vast.ai before the
-    SSH fleet is applied. Deleting the fleet does not terminate the Vast.ai
-    instance because the instance was rented outside dstack.
-    """
-    _check_can_manage_ssh_fleets(user=user, project=project)
-
-    backend_config = await backends_services.get_backend_config(
-        project=project, backend_type=BackendType.VASTAI
-    )
-    if backend_config is None:
-        raise ServerClientError("Vast.ai backend is not configured for this project")
-
-    creds = getattr(backend_config, "creds", None)
-    api_key = getattr(creds, "api_key", None)
-    if not api_key:
-        raise ServerClientError("Vast.ai backend credentials are unavailable")
-
-    client = VastAIAPIClient(api_key=api_key)
-    try:
-        instance = await run_async(client.get_instance, instance_id)
-    except VastAIRateLimitError as e:
-        raise ServerClientError("Vast.ai rate limit reached. Try again shortly") from e
-    except Exception as e:
-        raise ServerClientError(f"Failed to query Vast.ai instance {instance_id}: {e}") from e
-
-    if not instance:
-        raise ServerClientError(f"Vast.ai instance {instance_id} was not found")
-
-    hostname = instance.get("ssh_host") or instance.get("public_ipaddr")
-    port = instance.get("ssh_port")
-    if not port:
-        ports = instance.get("ports") or {}
-        ssh_ports = ports.get("22/tcp") or []
-        if ssh_ports:
-            port = ssh_ports[0].get("HostPort")
-    if not hostname or not port:
-        status = instance.get("actual_status") or "unknown"
-        raise ServerClientError(
-            f"Vast.ai instance {instance_id} does not have a ready SSH endpoint (status: {status})"
-        )
-    try:
-        port = int(port)
-    except (TypeError, ValueError) as e:
-        raise ServerClientError(f"Vast.ai instance {instance_id} returned an invalid SSH port") from e
-
-    ssh_key = SSHKey(
-        public=project.ssh_public_key.strip(),
-        private=project.ssh_private_key.strip(),
-    )
-    name = fleet_name or f"vast-{instance_id}"
-    spec = FleetSpec(
-        configuration=FleetConfiguration(
-            name=name,
-            ssh_config=SSHParams(
-                user="root",
-                ssh_key=ssh_key,
-                hosts=[SSHHostParams(hostname=hostname.strip(), port=port)],
-            ),
-        ),
-        profile=Profile(),
-    )
-
-    plan = await get_plan(session=session, project=project, user=user, spec=spec)
-    try:
-        await run_async(client.attach_ssh_key, instance_id, ssh_key.public)
-    except VastAIRateLimitError as e:
-        raise ServerClientError("Vast.ai rate limit reached while attaching the SSH key") from e
-    except Exception as e:
-        raise ServerClientError(
-            f"Failed to attach the dstack SSH key to Vast.ai instance {instance_id}: {e}"
-        ) from e
-
-    return await apply_plan(
-        session=session,
-        user=user,
-        project=project,
-        plan=ApplyFleetPlanInput(spec=spec, current_resource=plan.current_resource),
-        force=False,
         pipeline_hinter=pipeline_hinter,
     )
 

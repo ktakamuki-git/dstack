@@ -5,7 +5,6 @@ export interface FleetFormFieldsProps<TFieldValues extends FieldValues = FieldVa
     extends Pick<UseFormReturn<TFieldValues>, 'control'> {
     fieldNamePrefix?: string;
     disabledAllFields?: boolean;
-    showProvisioningFields?: boolean;
 }
 
 export type FleetFormFields = {

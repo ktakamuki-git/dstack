@@ -120,15 +120,6 @@ class VastAIAPIClient:
         data = resp.json()
         return data["instances"]
 
-    def attach_ssh_key(self, instance_id: Union[str, int], ssh_key: str) -> None:
-        resp = self.s.post(
-            f"/v0/instances/{instance_id}/ssh/",
-            json={"ssh_key": ssh_key},
-        )
-        if resp.status_code == 429:
-            raise VastAIRateLimitError()
-        resp.raise_for_status()
-
     def auth_test(self) -> bool:
         try:
             self.s.get("/v1/instances/").raise_for_status()
