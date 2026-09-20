@@ -688,7 +688,10 @@
             "idle_duration": "Idle duration",
             "idle_duration_description": "Example: '0s', '1m', '1h'",
             "spot_policy": "Spot policy",
-            "spot_policy_description": "Set it to 'auto' to allow the use of both on-demand and spot instances"
+            "spot_policy_description": "Set it to 'auto' to allow the use of both on-demand and spot instances",
+            "vast_instance_id": "Vast.ai instance ID",
+            "vast_instance_id_description": "Enter an already-rented Vast.ai instance ID to register it as an SSH fleet. The configured Vast.ai credentials and dstack project SSH key are used automatically.",
+            "vast_instance_id_placeholder": "Optional"
         }
     },
     "volume": {

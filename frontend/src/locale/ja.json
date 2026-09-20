@@ -435,7 +435,10 @@
       "max_instances": "最大インスタンス数",
       "max_instances_placeholder": "任意",
       "idle_duration": "アイドル時間",
-      "spot_policy": "Spot方針"
+      "spot_policy": "Spot方針",
+      "vast_instance_id": "Vast.ai インスタンスID",
+      "vast_instance_id_description": "すでに借りているVast.aiインスタンスをSSH Fleetとして登録する場合にIDを入力します。Vast.aiの既存設定とdstackのプロジェクトSSH鍵を自動的に使用します。",
+      "vast_instance_id_placeholder": "任意"
     }
   },
   "volume": {

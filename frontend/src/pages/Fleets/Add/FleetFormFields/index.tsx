@@ -19,6 +19,7 @@ export function FleetFormFields<T extends FieldValues = FieldValues>({
     control,
     disabledAllFields,
     fieldNamePrefix,
+    showProvisioningFields = true,
 }: FleetFormFieldsProps<T>) {
     const { t } = useTranslation();
     const [openHelpPanel] = useHelpPanel();
@@ -44,57 +45,61 @@ export function FleetFormFields<T extends FieldValues = FieldValues>({
                 disabled={disabledAllFields}
             />
 
-            <FormInput
-                info={<InfoLink onFollow={() => openHelpPanel(FLEET_MIN_INSTANCES_INFO)} />}
-                label={t('fleets.edit.min_instances')}
-                constraintText={t('fleets.edit.min_instances_description')}
-                control={control}
-                //eslint-disable-next-line @typescript-eslint/ban-ts-comment
-                // @ts-expect-error
-                name={getFieldNameWitPrefix(`min_instances`)}
-                disabled={disabledAllFields}
-                type="number"
-            />
+            {showProvisioningFields && (
+                <>
+                    <FormInput
+                        info={<InfoLink onFollow={() => openHelpPanel(FLEET_MIN_INSTANCES_INFO)} />}
+                        label={t('fleets.edit.min_instances')}
+                        constraintText={t('fleets.edit.min_instances_description')}
+                        control={control}
+                        //eslint-disable-next-line @typescript-eslint/ban-ts-comment
+                        // @ts-expect-error
+                        name={getFieldNameWitPrefix(`min_instances`)}
+                        disabled={disabledAllFields}
+                        type="number"
+                    />
 
-            <FormInput
-                info={<InfoLink onFollow={() => openHelpPanel(FLEET_MAX_INSTANCES_INFO)} />}
-                label={t('fleets.edit.max_instances')}
-                constraintText={t('fleets.edit.max_instances_description')}
-                placeholder={t('fleets.edit.max_instances_placeholder')}
-                control={control}
-                //eslint-disable-next-line @typescript-eslint/ban-ts-comment
-                // @ts-expect-error
-                name={getFieldNameWitPrefix(`max_instances`)}
-                disabled={disabledAllFields}
-                type="number"
-            />
+                    <FormInput
+                        info={<InfoLink onFollow={() => openHelpPanel(FLEET_MAX_INSTANCES_INFO)} />}
+                        label={t('fleets.edit.max_instances')}
+                        constraintText={t('fleets.edit.max_instances_description')}
+                        placeholder={t('fleets.edit.max_instances_placeholder')}
+                        control={control}
+                        //eslint-disable-next-line @typescript-eslint/ban-ts-comment
+                        // @ts-expect-error
+                        name={getFieldNameWitPrefix(`max_instances`)}
+                        disabled={disabledAllFields}
+                        type="number"
+                    />
 
-            <FormSelect
-                info={<InfoLink onFollow={() => openHelpPanel(FLEET_SPOT_POLICY_INFO)} />}
-                label={t('fleets.edit.spot_policy')}
-                constraintText={t('fleets.edit.spot_policy_description')}
-                control={control}
-                //eslint-disable-next-line @typescript-eslint/ban-ts-comment
-                // @ts-expect-error
-                name={getFieldNameWitPrefix(`spot_policy`)}
-                disabled={disabledAllFields}
-                options={[
-                    { label: 'auto', value: 'auto' },
-                    { label: 'on-demand', value: 'on-demand' },
-                    { label: 'spot', value: 'spot' },
-                ]}
-            />
+                    <FormSelect
+                        info={<InfoLink onFollow={() => openHelpPanel(FLEET_SPOT_POLICY_INFO)} />}
+                        label={t('fleets.edit.spot_policy')}
+                        constraintText={t('fleets.edit.spot_policy_description')}
+                        control={control}
+                        //eslint-disable-next-line @typescript-eslint/ban-ts-comment
+                        // @ts-expect-error
+                        name={getFieldNameWitPrefix(`spot_policy`)}
+                        disabled={disabledAllFields}
+                        options={[
+                            { label: 'auto', value: 'auto' },
+                            { label: 'on-demand', value: 'on-demand' },
+                            { label: 'spot', value: 'spot' },
+                        ]}
+                    />
 
-            <FormInput
-                info={<InfoLink onFollow={() => openHelpPanel(FLEET_IDLE_DURATION_INFO)} />}
-                label={t('fleets.edit.idle_duration')}
-                constraintText={t('fleets.edit.idle_duration_description')}
-                control={control}
-                //eslint-disable-next-line @typescript-eslint/ban-ts-comment
-                // @ts-expect-error
-                name={getFieldNameWitPrefix(`idle_duration`)}
-                disabled={disabledAllFields}
-            />
+                    <FormInput
+                        info={<InfoLink onFollow={() => openHelpPanel(FLEET_IDLE_DURATION_INFO)} />}
+                        label={t('fleets.edit.idle_duration')}
+                        constraintText={t('fleets.edit.idle_duration_description')}
+                        control={control}
+                        //eslint-disable-next-line @typescript-eslint/ban-ts-comment
+                        // @ts-expect-error
+                        name={getFieldNameWitPrefix(`idle_duration`)}
+                        disabled={disabledAllFields}
+                    />
+                </>
+            )}
         </SpaceBetween>
     );
 }

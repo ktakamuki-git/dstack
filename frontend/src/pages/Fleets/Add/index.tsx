@@ -6,11 +6,11 @@ import { isNil } from 'lodash';
 import * as yup from 'yup';
 import { Box, WizardProps } from '@cloudscape-design/components';
 
-import { Container, InfoLink, KeyValuePairs, SpaceBetween, Wizard } from 'components';
+import { Container, FormInput, InfoLink, KeyValuePairs, SpaceBetween, Wizard } from 'components';
 
 import { useBreadcrumbs, useConfirmationDialog, useHelpPanel, useNotifications } from 'hooks';
 import { ROUTES } from 'routes';
-import { useApplyFleetMutation } from 'services/fleet';
+import { useApplyFleetMutation, useRegisterVastInstanceMutation } from 'services/fleet';
 
 import { DEFAULT_FLEET_INFO } from 'pages/Project/constants';
 import { useYupValidationResolver } from 'pages/Project/hooks/useYupValidationResolver';
@@ -39,6 +39,10 @@ const fleetValidationSchema = yup.object({
     max_instances: getMaxInstancesValidator('min_instances'),
     idle_duration: idleDurationValidator,
     spot_policy: yup.string().required(requiredFieldError),
+    vast_instance_id: yup
+        .string()
+        .matches(/^\d+$/, 'Vast.ai instance ID must contain digits only', { excludeEmptyString: true })
+        .optional(),
 });
 
 export const FleetAdd: React.FC = () => {
@@ -50,10 +54,11 @@ export const FleetAdd: React.FC = () => {
     const [pushNotification] = useNotifications();
     const [openConfirmationDialog] = useConfirmationDialog();
     const [applyFleet, { isLoading: isApplyingFleet }] = useApplyFleetMutation();
+    const [registerVastInstance, { isLoading: isRegisteringVastInstance }] = useRegisterVastInstanceMutation();
     const [activeStepIndex, setActiveStepIndex] = useState(0);
     const resolver = useYupValidationResolver(fleetValidationSchema);
 
-    const loading = isApplyingFleet;
+    const loading = isApplyingFleet || isRegisteringVastInstance;
 
     const formMethods = useForm<IFleetWizardForm>({
         resolver,
@@ -65,6 +70,7 @@ export const FleetAdd: React.FC = () => {
 
     const { handleSubmit, control, clearErrors, trigger, watch, getValues } = formMethods;
     const formValues = watch();
+    const isVastRegistration = Boolean(formValues.vast_instance_id?.trim());
 
     const getFormValuesForFleetApplying = (): IApplyFleetPlanRequestRequest => {
         const { min_instances, max_instances, idle_duration, name, spot_policy } = getValues();
@@ -108,6 +114,9 @@ export const FleetAdd: React.FC = () => {
     ]);
 
     const validateFleet = async () => {
+        if (isVastRegistration) {
+            return await trigger(['vast_instance_id']);
+        }
         return await trigger(['min_instances', 'max_instances', 'idle_duration']);
     };
 
@@ -125,7 +134,7 @@ export const FleetAdd: React.FC = () => {
         if (reason === 'next') {
             stepValidators[activeStepIndex]?.().then((isValid) => {
                 if (isValid) {
-                    if (activeStepIndex === fleetStepIndex && formValues?.['min_instances'] > 0) {
+                    if (!isVastRegistration && activeStepIndex === fleetStepIndex && formValues?.['min_instances'] > 0) {
                         openConfirmationDialog({
                             title: 'Are sure want to set min instances above than 0?',
                             content: null,
@@ -150,7 +159,7 @@ export const FleetAdd: React.FC = () => {
     };
 
     const onSubmitWizard = async () => {
-        const isValid = await trigger();
+        const isValid = isVastRegistration ? await trigger(['vast_instance_id']) : await trigger();
 
         const { project_name } = getValues();
 
@@ -160,10 +169,16 @@ export const FleetAdd: React.FC = () => {
 
         clearErrors();
 
-        const request = applyFleet({
-            projectName: project_name,
-            ...getFormValuesForFleetApplying(),
-        }).unwrap();
+        const request = isVastRegistration
+            ? registerVastInstance({
+                  projectName: project_name,
+                  instance_id: Number(formValues.vast_instance_id),
+                  ...(formValues.name ? { fleet_name: formValues.name } : {}),
+              }).unwrap()
+            : applyFleet({
+                  projectName: project_name,
+                  ...getFormValuesForFleetApplying(),
+              }).unwrap();
 
         request
             .then((data) => {
@@ -191,13 +206,9 @@ export const FleetAdd: React.FC = () => {
     };
 
     const getDefaultFleetSummary = () => {
-        const summaryFields: Array<keyof IFleetWizardForm> = [
-            'name',
-            'min_instances',
-            'max_instances',
-            'idle_duration',
-            'spot_policy',
-        ];
+        const summaryFields: Array<keyof IFleetWizardForm> = isVastRegistration
+            ? ['name', 'vast_instance_id']
+            : ['name', 'min_instances', 'max_instances', 'idle_duration', 'spot_policy'];
 
         const result: string[] = [];
 
@@ -239,7 +250,19 @@ export const FleetAdd: React.FC = () => {
                         content: (
                             <Container>
                                 <SpaceBetween direction="vertical" size="l">
-                                    <FleetFormFields<IFleetWizardForm> control={control} disabledAllFields={loading} />
+                                    <FormInput
+                                        label={t('fleets.edit.vast_instance_id')}
+                                        constraintText={t('fleets.edit.vast_instance_id_description')}
+                                        placeholder={t('fleets.edit.vast_instance_id_placeholder')}
+                                        control={control}
+                                        name="vast_instance_id"
+                                        disabled={loading}
+                                    />
+                                    <FleetFormFields<IFleetWizardForm>
+                                        control={control}
+                                        disabledAllFields={loading}
+                                        showProvisioningFields={!isVastRegistration}
+                                    />
                                 </SpaceBetween>
                             </Container>
                         ),

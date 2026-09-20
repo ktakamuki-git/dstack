@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from typing import Optional, Union
 from unittest.mock import Mock
 
@@ -16,7 +17,9 @@ from dstack._internal.core.models.fleets import (
     SSHParams,
 )
 from dstack._internal.core.models.instances import RemoteConnectionInfo
+from dstack._internal.core.models.users import GlobalRole
 from dstack._internal.server.models import FleetModel, ProjectModel
+from dstack._internal.server.services import fleets as fleets_services
 from dstack._internal.server.services.backends import get_project_backends
 from dstack._internal.server.services.fleets import (
     get_fleet_master_instance_provisioning_data,
@@ -31,6 +34,100 @@ from dstack._internal.server.testing.common import (
     get_job_provisioning_data,
     get_ssh_key,
 )
+
+
+class TestRegisterVastInstance:
+    @pytest.mark.asyncio
+    async def test_registers_rented_instance_as_ssh_fleet(
+        self, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        user = await create_user(session=session, global_role=GlobalRole.ADMIN)
+        project = await create_project(session=session, owner=user)
+        calls = {}
+
+        async def get_backend_config(*, project, backend_type):
+            assert backend_type == BackendType.VASTAI
+            return SimpleNamespace(creds=SimpleNamespace(api_key="test-api-key"))
+
+        class FakeVastAIAPIClient:
+            def __init__(self, api_key: str):
+                assert api_key == "test-api-key"
+
+            def get_instance(self, instance_id: int):
+                assert instance_id == 51729340
+                return {
+                    "actual_status": "running",
+                    "ssh_host": "203.0.113.42",
+                    "ssh_port": 23456,
+                }
+
+            def attach_ssh_key(self, instance_id: int, ssh_key: str):
+                calls["attached"] = (instance_id, ssh_key)
+
+        async def get_plan(*, session, project, user, spec):
+            calls["spec"] = spec
+            return SimpleNamespace(current_resource=None)
+
+        sentinel = object()
+
+        async def apply_plan(**kwargs):
+            calls["apply"] = kwargs
+            return sentinel
+
+        monkeypatch.setattr(fleets_services.backends_services, "get_backend_config", get_backend_config)
+        monkeypatch.setattr(fleets_services, "VastAIAPIClient", FakeVastAIAPIClient)
+        monkeypatch.setattr(fleets_services, "get_plan", get_plan)
+        monkeypatch.setattr(fleets_services, "apply_plan", apply_plan)
+
+        result = await fleets_services.register_vast_instance(
+            session=session,
+            user=user,
+            project=project,
+            instance_id=51729340,
+            fleet_name=None,
+            pipeline_hinter=Mock(),
+        )
+
+        assert result is sentinel
+        spec = calls["spec"]
+        assert spec.configuration.name == "vast-51729340"
+        assert spec.configuration.ssh_config.user == "root"
+        host = spec.configuration.ssh_config.hosts[0]
+        assert isinstance(host, SSHHostParams)
+        assert host.hostname == "203.0.113.42"
+        assert host.port == 23456
+        assert calls["attached"] == (51729340, project.ssh_public_key.strip())
+        assert calls["apply"]["plan"].spec.configuration.name == "vast-51729340"
+
+    @pytest.mark.asyncio
+    async def test_errors_when_ssh_endpoint_is_not_ready(
+        self, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        user = await create_user(session=session, global_role=GlobalRole.ADMIN)
+        project = await create_project(session=session, owner=user)
+
+        async def get_backend_config(*, project, backend_type):
+            return SimpleNamespace(creds=SimpleNamespace(api_key="test-api-key"))
+
+        class FakeVastAIAPIClient:
+            def __init__(self, api_key: str):
+                pass
+
+            def get_instance(self, instance_id: int):
+                return {"actual_status": "loading"}
+
+        monkeypatch.setattr(fleets_services.backends_services, "get_backend_config", get_backend_config)
+        monkeypatch.setattr(fleets_services, "VastAIAPIClient", FakeVastAIAPIClient)
+
+        with pytest.raises(ServerClientError, match="does not have a ready SSH endpoint"):
+            await fleets_services.register_vast_instance(
+                session=session,
+                user=user,
+                project=project,
+                instance_id=51729340,
+                fleet_name=None,
+                pipeline_hinter=Mock(),
+            )
 
 
 class TestGetPlanSSHFleetHostsValidation:

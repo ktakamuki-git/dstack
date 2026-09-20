@@ -19,6 +19,7 @@ from dstack._internal.server.schemas.fleets import (
     GetFleetRequest,
     ListFleetsRequest,
     ListProjectFleetsRequest,
+    RegisterVastInstanceRequest,
 )
 from dstack._internal.server.security.permissions import (
     Authenticated,
@@ -165,6 +166,31 @@ async def apply_plan(
         project=project,
         plan=body.plan,
         force=body.force,
+        pipeline_hinter=pipeline_hinter,
+    )
+    patch_fleet(fleet, client_version)
+    return CustomJSONResponse(fleet)
+
+
+@project_router.post(
+    "/register_vast_instance",
+    summary="Register an existing Vast.ai instance",
+    response_model=Fleet,
+)
+async def register_vast_instance(
+    body: RegisterVastInstanceRequest,
+    session: AsyncSession = Depends(get_session),
+    user_project: Tuple[UserModel, ProjectModel] = Depends(ProjectMember()),
+    pipeline_hinter: PipelineHinterProtocol = Depends(get_pipeline_hinter),
+    client_version: Optional[Version] = Depends(get_client_version),
+):
+    user, project = user_project
+    fleet = await fleets_services.register_vast_instance(
+        session=session,
+        user=user,
+        project=project,
+        instance_id=body.instance_id,
+        fleet_name=body.fleet_name,
         pipeline_hinter=pipeline_hinter,
     )
     patch_fleet(fleet, client_version)
