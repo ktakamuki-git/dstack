@@ -229,6 +229,14 @@ class TestResolveSSHKey:
         assert private_key.startswith("-----BEGIN RSA PRIVATE KEY-----")
         assert pkey_from_str(private_key)
 
+    @pytest.mark.skipif(find_ssh_util("ssh-keygen") is None, reason="requires ssh-keygen")
+    def test_pkey_from_str_accepts_generated_pkcs8_private_key(self):
+        private_key_bytes, _ = crypto.generate_rsa_key_pair_bytes()
+
+        pkey = pkey_from_str(private_key_bytes.decode())
+
+        assert pkey.get_name() == "ssh-rsa"
+
     @pytest.mark.parametrize("contents", ["", "garbage", "ssh-ed25519 not-base64"])
     def test_raises_on_invalid_key(self, tmp_path: Path, contents: str):
         key_path = tmp_path / "id_ed25519"

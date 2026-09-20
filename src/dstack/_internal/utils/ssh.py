@@ -326,6 +326,7 @@ def convert_ssh_key_to_pem(private_string: str) -> str:
 
 
 def pkey_from_str(private_string: str) -> PKey:
+    private_string = convert_ssh_key_to_pem(private_string)
     for key_type in SUPPORTED_KEY_TYPES:
         try:
             key_file = io.StringIO(private_string.strip())
