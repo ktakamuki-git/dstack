@@ -249,7 +249,7 @@ def run_shim_as_background_process(
         if [ -f "$pid_file" ]; then
             old_pid=$(cat "$pid_file" 2>/dev/null || true)
             if [ -n "$old_pid" ] && kill -0 "$old_pid" 2>/dev/null; then
-                if tr '\0' ' ' < "/proc/$old_pid/cmdline" | grep -F -- "$binary" >/dev/null 2>&1; then
+                if grep -aF -- "$binary" "/proc/$old_pid/cmdline" >/dev/null 2>&1; then
                     kill "$old_pid"
                     i=0
                     while kill -0 "$old_pid" 2>/dev/null && [ "$i" -lt 20 ]; do
