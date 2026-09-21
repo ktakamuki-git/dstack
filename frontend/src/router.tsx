@@ -13,7 +13,7 @@ import { LoginByGoogleCallback } from 'App/Login/LoginByGoogleCallback';
 import { LoginByOktaCallback } from 'App/Login/LoginByOktaCallback';
 import { TokenLogin } from 'App/Login/TokenLogin';
 import { Logout } from 'App/Logout';
-import { FleetAdd, FleetDetails, FleetList } from 'pages/Fleets';
+import { FleetAdd, FleetDetails, FleetImportVast, FleetList } from 'pages/Fleets';
 import { EventsList as FleetEventsList } from 'pages/Fleets/Details/Events';
 import { FleetDetails as FleetDetailsGeneral } from 'pages/Fleets/Details/FleetDetails';
 import { FleetInspect } from 'pages/Fleets/Details/Inspect';
@@ -238,6 +238,10 @@ export const router = createBrowserRouter([
             {
                 path: ROUTES.FLEETS.ADD.TEMPLATE,
                 element: <FleetAdd />,
+            },
+            {
+                path: ROUTES.FLEETS.IMPORT_VAST,
+                element: <FleetImportVast />,
             },
             {
                 path: ROUTES.FLEETS.DETAILS.TEMPLATE,

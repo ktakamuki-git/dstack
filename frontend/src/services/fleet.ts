@@ -85,6 +85,15 @@ export const fleetApi = createApi({
 
             invalidatesTags: ['Fleets'],
         }),
+
+        importVastInstance: builder.mutation<IFleet, IImportVastInstanceRequest & { projectName: IProject['project_name'] }>({
+            query: ({ projectName, ...body }) => ({
+                url: API.PROJECTS.FLEETS_IMPORT_VAST_INSTANCE(projectName),
+                method: 'POST',
+                body,
+            }),
+            invalidatesTags: ['Fleets'],
+        }),
     }),
 });
 
@@ -96,4 +105,5 @@ export const {
     useDeleteFleetMutation,
     useGetFleetDetailsQuery,
     useApplyFleetMutation,
+    useImportVastInstanceMutation,
 } = fleetApi;

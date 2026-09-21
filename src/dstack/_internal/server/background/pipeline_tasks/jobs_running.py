@@ -82,6 +82,10 @@ from dstack._internal.server.services.backends.provisioning import (
     get_instance_specific_mounts,
     resolve_provisioning_image,
 )
+from dstack._internal.server.services.external_runner import (
+    ensure_external_runner_started,
+    is_external_runner,
+)
 from dstack._internal.server.services.gateways import (
     get_gateway_replica_models,
     skip_gateway_replicas_min_processing_interval,
@@ -871,6 +875,14 @@ async def _process_provisioning_status(
             context.job_submission.age,
         )
         try:
+            if is_external_runner(job_provisioning_data):
+                await run_async(
+                    ensure_external_runner_started,
+                    server_ssh_private_keys[0],
+                    job_provisioning_data,
+                    context.project.ssh_public_key,
+                    str(context.job_model.id),
+                )
             if await run_async(
                 _is_runner_available,
                 server_ssh_private_keys,

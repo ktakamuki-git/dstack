@@ -40,6 +40,7 @@ from dstack._internal.core.models.instances import (
 )
 from dstack._internal.core.models.placement import PlacementGroup
 from dstack._internal.core.models.profiles import (
+    CreationPolicy,
     Profile,
     SpotPolicy,
 )
@@ -1002,6 +1003,8 @@ def get_fleet_master_instance_provisioning_data(
 
 def can_create_new_cloud_instance_in_fleet(fleet_model: FleetModel, fleet_spec: FleetSpec) -> bool:
     if fleet_spec.configuration.ssh_config is not None:
+        return False
+    if fleet_spec.merged_profile.creation_policy == CreationPolicy.REUSE:
         return False
     active_instances = [i for i in fleet_model.instances if i.status.is_active()]
     # nodes.max is a soft limit that can be exceeded when provisioning concurrently.

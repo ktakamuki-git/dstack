@@ -108,3 +108,9 @@ declare interface IApplyFleetPlanRequestRequest {
 
     force: boolean;
 }
+
+
+declare interface IImportVastInstanceRequest {
+    instance_id: number;
+    fleet_name?: string;
+}

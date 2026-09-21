@@ -24,6 +24,7 @@ from dstack._internal.server.background.pipeline_tasks.jobs_terminating import (
 )
 from dstack._internal.server.models import InstanceModel, JobModel, VolumeAttachmentModel
 from dstack._internal.server.schemas.runner import LogEvent, PullResponse
+from dstack._internal.server.services.external_runner import build_external_runner_backend_data
 from dstack._internal.server.services.runner.client import (
     PeerConnectionError,
     RunnerClient,
@@ -1231,6 +1232,50 @@ class TestJobTerminatingWorker:
         assert job.graceful_termination_attempts == 1
         assert job.remove_at is not None
         assert job.instance_id == instance.id
+
+    async def test_imported_vast_runner_returns_to_idle_after_job(
+        self, test_db, session: AsyncSession, worker: JobTerminatingWorker
+    ):
+        project = await create_project(session=session)
+        user = await create_user(session=session)
+        jpd = get_job_provisioning_data(dockerized=False, backend=BackendType.REMOTE)
+        jpd.base_backend = BackendType.VASTAI
+        jpd.backend_data = build_external_runner_backend_data("12345")
+        jpd.hostname = None
+        jpd.ssh_port = None
+        instance = await create_instance(
+            session=session,
+            project=project,
+            status=InstanceStatus.BUSY,
+            backend=BackendType.VASTAI,
+            job_provisioning_data=jpd,
+            busy_blocks=1,
+            total_blocks=1,
+        )
+        repo = await create_repo(session=session, project_id=project.id)
+        run = await create_run(session=session, project=project, repo=repo, user=user)
+        job = await create_job(
+            session=session,
+            run=run,
+            status=JobStatus.TERMINATING,
+            termination_reason=JobTerminationReason.TERMINATED_BY_USER,
+            job_provisioning_data=jpd,
+            instance=instance,
+        )
+        job.graceful_termination_attempts = 1
+        job.remove_at = get_current_datetime() - timedelta(minutes=1)
+        _lock_job(job)
+        await session.commit()
+
+        await worker.process(_job_to_pipeline_item(job))
+
+        await session.refresh(job)
+        await session.refresh(instance)
+        assert job.status == JobStatus.TERMINATED
+        assert job.instance_id is None
+        assert instance.status == InstanceStatus.IDLE
+        assert instance.busy_blocks == 0
+        assert instance.termination_reason is None
 
     async def test_terminates_job_without_provisioning_data_hostname(
         self, test_db, session: AsyncSession, worker: JobTerminatingWorker

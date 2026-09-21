@@ -51,6 +51,11 @@ class ApplyFleetPlanRequest(CoreModel):
     ]
 
 
+class ImportVastInstanceRequest(CoreModel):
+    instance_id: Annotated[int, Field(gt=0)]
+    fleet_name: Optional[str] = None
+
+
 class DeleteFleetsRequest(CoreModel):
     names: List[str]
 

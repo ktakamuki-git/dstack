@@ -14,7 +14,12 @@ from dstack._internal.server.background.pipeline_tasks.instances import Instance
 from dstack._internal.server.background.pipeline_tasks.instances import (
     termination as instances_termination,
 )
-from dstack._internal.server.testing.common import create_instance, create_project
+from dstack._internal.server.services.external_runner import build_external_runner_backend_data
+from dstack._internal.server.testing.common import (
+    create_instance,
+    create_project,
+    get_job_provisioning_data,
+)
 from tests._internal.server.background.pipeline_tasks.test_instances.helpers import (
     instance_to_pipeline_item,
     lock_instance,
@@ -69,6 +74,39 @@ class TestTermination:
         assert instance.deleted is True
         assert instance.deleted_at is not None
         assert instance.finished_at is not None
+
+    async def test_external_vast_termination_does_not_destroy_provider_instance(
+        self,
+        test_db,
+        session: AsyncSession,
+        worker: InstanceWorker,
+    ):
+        project = await create_project(session=session)
+        jpd = get_job_provisioning_data(dockerized=False, backend=BackendType.REMOTE)
+        jpd.base_backend = BackendType.VASTAI
+        jpd.backend_data = build_external_runner_backend_data("12345")
+        instance = await create_instance(
+            session=session,
+            project=project,
+            status=InstanceStatus.TERMINATING,
+            backend=BackendType.VASTAI,
+            job_provisioning_data=jpd,
+        )
+        instance.termination_reason = InstanceTerminationReason.TERMINATED_BY_USER
+        instance.last_job_processed_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=19)
+        await session.commit()
+
+        with patch.object(
+            instances_termination.backends_services,
+            "get_project_backend_by_type",
+            AsyncMock(),
+        ) as get_backend:
+            await process_instance(session, worker, instance)
+            get_backend.assert_not_awaited()
+
+        await session.refresh(instance)
+        assert instance.status == InstanceStatus.TERMINATED
+        assert instance.deleted is True
 
     async def test_terminates_terminating_deleted_instance(
         self,

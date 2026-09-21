@@ -142,6 +142,7 @@ export const ROUTES = {
 
     FLEETS: {
         LIST: '/fleets',
+        IMPORT_VAST: '/fleets/import/vastai',
         ADD: {
             TEMPLATE: `/projects/:projectName/fleets/add`,
             FORMAT: (projectName: string) => buildRoute(ROUTES.FLEETS.ADD.TEMPLATE, { projectName }),

@@ -5,6 +5,7 @@ from packaging.version import Version
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import dstack._internal.server.services.fleets as fleets_services
+import dstack._internal.server.services.vast_import as vast_import_services
 from dstack._internal.core.errors import ResourceNotExistsError
 from dstack._internal.core.models.fleets import Fleet, FleetPlan
 from dstack._internal.server.compatibility.fleets import patch_fleet, patch_fleet_plan
@@ -17,6 +18,7 @@ from dstack._internal.server.schemas.fleets import (
     DeleteFleetsRequest,
     GetFleetPlanRequest,
     GetFleetRequest,
+    ImportVastInstanceRequest,
     ListFleetsRequest,
     ListProjectFleetsRequest,
 )
@@ -165,6 +167,31 @@ async def apply_plan(
         project=project,
         plan=body.plan,
         force=body.force,
+        pipeline_hinter=pipeline_hinter,
+    )
+    patch_fleet(fleet, client_version)
+    return CustomJSONResponse(fleet)
+
+
+@project_router.post(
+    "/import_vast_instance",
+    summary="Import an existing Vast.ai instance",
+    response_model=Fleet,
+)
+async def import_vast_instance(
+    body: ImportVastInstanceRequest,
+    session: AsyncSession = Depends(get_session),
+    user_project: Tuple[UserModel, ProjectModel] = Depends(ProjectMember()),
+    pipeline_hinter: PipelineHinterProtocol = Depends(get_pipeline_hinter),
+    client_version: Optional[Version] = Depends(get_client_version),
+):
+    user, project = user_project
+    fleet = await vast_import_services.import_vast_instance(
+        session=session,
+        user=user,
+        project=project,
+        instance_id=body.instance_id,
+        fleet_name=body.fleet_name,
         pipeline_hinter=pipeline_hinter,
     )
     patch_fleet(fleet, client_version)

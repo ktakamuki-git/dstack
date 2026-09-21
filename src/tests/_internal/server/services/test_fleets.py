@@ -16,9 +16,11 @@ from dstack._internal.core.models.fleets import (
     SSHParams,
 )
 from dstack._internal.core.models.instances import RemoteConnectionInfo
+from dstack._internal.core.models.profiles import CreationPolicy, Profile
 from dstack._internal.server.models import FleetModel, ProjectModel
 from dstack._internal.server.services.backends import get_project_backends
 from dstack._internal.server.services.fleets import (
+    can_create_new_cloud_instance_in_fleet,
     get_fleet_master_instance_provisioning_data,
     get_plan,
 )
@@ -32,6 +34,13 @@ from dstack._internal.server.testing.common import (
     get_ssh_key,
 )
 
+
+def test_reuse_only_fleet_never_creates_cloud_capacity() -> None:
+    fleet_spec = get_fleet_spec(profile=Profile(creation_policy=CreationPolicy.REUSE))
+    fleet_model = Mock(spec=FleetModel)
+    fleet_model.instances = []
+
+    assert not can_create_new_cloud_instance_in_fleet(fleet_model, fleet_spec)
 
 class TestGetPlanSSHFleetHostsValidation:
     @pytest.fixture

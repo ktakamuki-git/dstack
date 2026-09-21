@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import { Button, Header, Loader, PropertyFilter, SpaceBetween, Table, Toggle } from 'components';
 
@@ -18,6 +19,7 @@ import styles from './styles.module.scss';
 
 export const FleetList: React.FC = () => {
     const { t } = useTranslation();
+    const navigate = useNavigate();
 
     useBreadcrumbs([
         {
@@ -99,6 +101,9 @@ export const FleetList: React.FC = () => {
                         variant="awsui-h1-sticky"
                         actions={
                             <SpaceBetween size="xs" direction="horizontal">
+                                <Button formAction="none" onClick={() => navigate(ROUTES.FLEETS.IMPORT_VAST)}>
+                                    Import Vast.ai
+                                </Button>
                                 <Button formAction="none" onClick={deleteClickHandle} disabled={isDisabledDeleteButton}>
                                     {t('common.delete')}
                                 </Button>

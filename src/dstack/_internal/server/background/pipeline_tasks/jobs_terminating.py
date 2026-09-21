@@ -51,6 +51,7 @@ from dstack._internal.server.models import (
 from dstack._internal.server.services import backends as backends_services
 from dstack._internal.server.services import events
 from dstack._internal.server.services import logs as logs_services
+from dstack._internal.server.services.external_runner import is_external_runner
 from dstack._internal.server.services.instances import (
     emit_instance_status_change_event,
     get_instance_ssh_private_keys,
@@ -719,7 +720,15 @@ async def _process_terminating_job(
     instance_update_map = get_or_error(result.instance_update_map)
     busy_blocks = instance_model.busy_blocks - _get_job_occupied_blocks(jrd)
     instance_update_map["busy_blocks"] = busy_blocks
-    if instance_model.status != InstanceStatus.BUSY or jpd is None or not jpd.dockerized:
+    if is_external_runner(jpd) and instance_model.status == InstanceStatus.BUSY:
+        # Imported Vast.ai instances are externally owned reusable capacity. The
+        # runner is per-job, but the rented container itself stays available.
+        instance_update_map["status"] = InstanceStatus.IDLE
+        instance_update_map["termination_reason"] = None
+        instance_update_map["termination_reason_message"] = None
+        instance_update_map["termination_deadline"] = None
+        instance_update_map["skip_min_processing_interval"] = True
+    elif instance_model.status != InstanceStatus.BUSY or jpd is None or not jpd.dockerized:
         if instance_model.status not in InstanceStatus.finished_statuses():
             instance_update_map["termination_reason"] = InstanceTerminationReason.JOB_FINISHED
             if instance_model.status != InstanceStatus.TERMINATING:

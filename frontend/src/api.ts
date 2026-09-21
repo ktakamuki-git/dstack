@@ -100,6 +100,8 @@ export const API = {
         FLEETS: (projectName: IProject['project_name']) => `${API.BASE()}/project/${projectName}/fleets/list`,
         FLEETS_DETAILS: (projectName: IProject['project_name']) => `${API.BASE()}/project/${projectName}/fleets/get`,
         FLEETS_APPLY: (projectName: IProject['project_name']) => `${API.BASE()}/project/${projectName}/fleets/apply`,
+        FLEETS_IMPORT_VAST_INSTANCE: (projectName: IProject['project_name']) =>
+            `${API.BASE()}/project/${projectName}/fleets/import_vast_instance`,
         FLEETS_DELETE: (projectName: IProject['project_name']) => `${API.BASE()}/project/${projectName}/fleets/delete`,
         FLEET_INSTANCES_DELETE: (projectName: IProject['project_name']) =>
             `${API.BASE()}/project/${projectName}/fleets/delete_instances`,

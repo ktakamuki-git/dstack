@@ -464,7 +464,10 @@ async def find_optimal_fleet_with_offers(
     candidates_with_backend_offers: list[_FleetCandidateWithBackendOffers] = []
     for candidate in candidates:
         backend_offers: list[tuple[Backend, InstanceOfferWithAvailability]]
-        if _skip_backend_offers:
+        if (
+            _skip_backend_offers
+            or candidate.fleet_spec.merged_profile.creation_policy == CreationPolicy.REUSE
+        ):
             backend_offers = []
         else:
             backend_offers = await _get_backend_offers_in_fleet(
@@ -498,7 +501,10 @@ async def find_optimal_fleet_with_offers(
     optimal = min(candidates_with_backend_offers, key=lambda c: c.sort_key)
     optimal_fleet_model = optimal.candidate.fleet_model
     instance_offers = optimal.candidate.instance_offers
-    if _skip_backend_offers:
+    if (
+        _skip_backend_offers
+        or optimal.candidate.fleet_spec.merged_profile.creation_policy == CreationPolicy.REUSE
+    ):
         backend_offers = []
     else:
         # Refetch backend offers without limit to return all offers for the optimal fleet.
