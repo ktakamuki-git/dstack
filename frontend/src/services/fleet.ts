@@ -9,7 +9,7 @@ export const fleetApi = createApi({
         prepareHeaders: fetchBaseQueryHeaders,
     }),
 
-    tagTypes: ['Fleet', 'Fleets'],
+    tagTypes: ['Fleet', 'Fleets', 'VastPreferredMachines'],
 
     endpoints: (builder) => ({
         getFleets: builder.query<IFleet[], TFleetListRequestParams>({
@@ -92,7 +92,39 @@ export const fleetApi = createApi({
                 method: 'POST',
                 body,
             }),
-            invalidatesTags: ['Fleets'],
+            invalidatesTags: ['Fleets', 'VastPreferredMachines'],
+        }),
+
+        getVastPreferredMachines: builder.query<IVastPreferredMachinesResponse, { projectName: IProject['project_name'] }>({
+            query: ({ projectName }) => ({
+                url: API.PROJECTS.FLEETS_VAST_PREFERRED_MACHINES_LIST(projectName),
+                method: 'POST',
+            }),
+            providesTags: ['VastPreferredMachines'],
+        }),
+
+        addVastPreferredMachine: builder.mutation<
+            IVastPreferredMachinesResponse,
+            IVastPreferredMachineRequest & { projectName: IProject['project_name'] }
+        >({
+            query: ({ projectName, ...body }) => ({
+                url: API.PROJECTS.FLEETS_VAST_PREFERRED_MACHINES_ADD(projectName),
+                method: 'POST',
+                body,
+            }),
+            invalidatesTags: ['VastPreferredMachines'],
+        }),
+
+        deleteVastPreferredMachine: builder.mutation<
+            IVastPreferredMachinesResponse,
+            IVastPreferredMachineRequest & { projectName: IProject['project_name'] }
+        >({
+            query: ({ projectName, ...body }) => ({
+                url: API.PROJECTS.FLEETS_VAST_PREFERRED_MACHINES_DELETE(projectName),
+                method: 'POST',
+                body,
+            }),
+            invalidatesTags: ['VastPreferredMachines'],
         }),
     }),
 });
@@ -106,4 +138,7 @@ export const {
     useGetFleetDetailsQuery,
     useApplyFleetMutation,
     useImportVastInstanceMutation,
+    useGetVastPreferredMachinesQuery,
+    useAddVastPreferredMachineMutation,
+    useDeleteVastPreferredMachineMutation,
 } = fleetApi;

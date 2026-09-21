@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import dstack._internal.server.services.fleets as fleets_services
 import dstack._internal.server.services.vast_import as vast_import_services
+import dstack._internal.server.services.vast_preferences as vast_preferences_services
 from dstack._internal.core.errors import ResourceNotExistsError
 from dstack._internal.core.models.fleets import Fleet, FleetPlan
 from dstack._internal.server.compatibility.fleets import patch_fleet, patch_fleet_plan
@@ -21,9 +22,12 @@ from dstack._internal.server.schemas.fleets import (
     ImportVastInstanceRequest,
     ListFleetsRequest,
     ListProjectFleetsRequest,
+    VastPreferredMachineRequest,
+    VastPreferredMachinesResponse,
 )
 from dstack._internal.server.security.permissions import (
     Authenticated,
+    ProjectAdmin,
     ProjectMember,
     check_can_access_fleet,
 )
@@ -196,6 +200,53 @@ async def import_vast_instance(
     )
     patch_fleet(fleet, client_version)
     return CustomJSONResponse(fleet)
+
+
+@project_router.post(
+    "/vast_preferred_machines/list",
+    summary="List preferred Vast.ai machines",
+    response_model=VastPreferredMachinesResponse,
+)
+async def list_vast_preferred_machines(
+    user_project: Tuple[UserModel, ProjectModel] = Depends(ProjectMember()),
+):
+    _, project = user_project
+    machine_ids = await vast_preferences_services.list_preferred_machine_ids(project)
+    return CustomJSONResponse(VastPreferredMachinesResponse(machine_ids=machine_ids))
+
+
+@project_router.post(
+    "/vast_preferred_machines/add",
+    summary="Add a preferred Vast.ai machine",
+    response_model=VastPreferredMachinesResponse,
+)
+async def add_vast_preferred_machine(
+    body: VastPreferredMachineRequest,
+    session: AsyncSession = Depends(get_session),
+    user_project: Tuple[UserModel, ProjectModel] = Depends(ProjectAdmin()),
+):
+    _, project = user_project
+    machine_ids = await vast_preferences_services.add_preferred_machine(
+        session=session, project=project, machine_id=body.machine_id
+    )
+    return CustomJSONResponse(VastPreferredMachinesResponse(machine_ids=machine_ids))
+
+
+@project_router.post(
+    "/vast_preferred_machines/delete",
+    summary="Delete a preferred Vast.ai machine",
+    response_model=VastPreferredMachinesResponse,
+)
+async def delete_vast_preferred_machine(
+    body: VastPreferredMachineRequest,
+    session: AsyncSession = Depends(get_session),
+    user_project: Tuple[UserModel, ProjectModel] = Depends(ProjectAdmin()),
+):
+    _, project = user_project
+    machine_ids = await vast_preferences_services.remove_preferred_machine(
+        session=session, project=project, machine_id=body.machine_id
+    )
+    return CustomJSONResponse(VastPreferredMachinesResponse(machine_ids=machine_ids))
 
 
 @project_router.post("/delete", summary="Delete fleets")

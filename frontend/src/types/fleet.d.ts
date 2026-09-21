@@ -114,3 +114,12 @@ declare interface IImportVastInstanceRequest {
     instance_id: number;
     fleet_name?: string;
 }
+
+
+declare interface IVastPreferredMachineRequest {
+    machine_id: number;
+}
+
+declare interface IVastPreferredMachinesResponse {
+    machine_ids: number[];
+}

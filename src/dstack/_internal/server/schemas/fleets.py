@@ -56,6 +56,14 @@ class ImportVastInstanceRequest(CoreModel):
     fleet_name: Optional[str] = None
 
 
+class VastPreferredMachineRequest(CoreModel):
+    machine_id: Annotated[int, Field(gt=0)]
+
+
+class VastPreferredMachinesResponse(CoreModel):
+    machine_ids: List[int]
+
+
 class DeleteFleetsRequest(CoreModel):
     names: List[str]
 

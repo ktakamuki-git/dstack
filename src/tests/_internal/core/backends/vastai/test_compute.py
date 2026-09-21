@@ -7,6 +7,7 @@ from dstack._internal.core.models.instances import (
     Disk,
     Gpu,
     InstanceAvailability,
+    InstanceOffer,
     InstanceOfferWithAvailability,
     InstanceType,
     Resources,
@@ -15,8 +16,12 @@ from dstack._internal.core.models.resources import ResourcesSpec
 from dstack._internal.core.models.runs import Requirements
 
 
-def _config(community_cloud=None) -> VastAIConfig:
-    return VastAIConfig(creds=VastAICreds(api_key="test"), community_cloud=community_cloud)
+def _config(community_cloud=None, preferred_machine_ids=None) -> VastAIConfig:
+    return VastAIConfig(
+        creds=VastAICreds(api_key="test"),
+        community_cloud=community_cloud,
+        preferred_machine_ids=preferred_machine_ids or [],
+    )
 
 
 def _requirements() -> Requirements:
@@ -44,6 +49,17 @@ def _offer(
         backend_data={
             **({"min_bid": min_bid} if min_bid is not None else {}),
         },
+    )
+
+
+def _catalog_offer(*, name: str, price: float) -> InstanceOffer:
+    offer = _offer(spot=False, price=price)
+    return InstanceOffer(
+        backend=offer.backend,
+        instance=offer.instance.model_copy(update={"name": name}),
+        region=offer.region,
+        price=offer.price,
+        backend_data=offer.backend_data.copy(),
     )
 
 
@@ -141,3 +157,61 @@ def test_vastai_run_job_does_not_bid_on_ondemand_offer():
     _run_job(compute, _offer(spot=False, price=0.24))
 
     assert compute.api_client.create_instance.call_args.kwargs["bid"] is None
+
+
+def test_vastai_compute_prioritizes_live_preferred_machine_offers():
+    preferred = _catalog_offer(name="preferred-offer", price=0.50)
+    marketplace_duplicate = preferred.model_copy(deep=True)
+    marketplace_other = _catalog_offer(name="other-offer", price=0.20)
+
+    with patch(
+        "dstack._internal.core.backends.vastai.compute.get_catalog_offers",
+        side_effect=[[preferred], [marketplace_other, marketplace_duplicate]],
+    ) as get_catalog_offers:
+        compute = VastAICompute(_config(preferred_machine_ids=[777]))
+        offers = compute.get_offers_by_requirements(
+            _requirements(), full_offers=False, unallocated_resources=False
+        )
+
+    assert [offer.instance.name for offer in offers] == ["preferred-offer", "other-offer"]
+    assert offers[0].backend_data["preferred_machine_id"] == 777
+    preferred_catalog = get_catalog_offers.call_args_list[0].kwargs["catalog"]
+    provider = preferred_catalog.providers[0]
+    assert provider.extra_filters["machine_id"] == {"eq": 777}
+
+
+def test_vastai_compute_falls_back_when_preferred_machine_is_unavailable():
+    marketplace = _catalog_offer(name="market-offer", price=0.25)
+
+    with patch(
+        "dstack._internal.core.backends.vastai.compute.get_catalog_offers",
+        side_effect=[[], [marketplace]],
+    ):
+        compute = VastAICompute(_config(preferred_machine_ids=[777]))
+        offers = compute.get_offers_by_requirements(
+            _requirements(), full_offers=False, unallocated_resources=False
+        )
+
+    assert [offer.instance.name for offer in offers] == ["market-offer"]
+    assert "preferred_machine_id" not in offers[0].backend_data
+
+
+def test_vastai_compute_checks_each_preferred_machine_once_in_saved_order():
+    first = _catalog_offer(name="first-offer", price=0.40)
+    second = _catalog_offer(name="second-offer", price=0.30)
+
+    with patch(
+        "dstack._internal.core.backends.vastai.compute.get_catalog_offers",
+        side_effect=[[first], [second], []],
+    ) as get_catalog_offers:
+        compute = VastAICompute(_config(preferred_machine_ids=[901, 902, 901]))
+        offers = compute.get_offers_by_requirements(
+            _requirements(), full_offers=False, unallocated_resources=False
+        )
+
+    assert [offer.instance.name for offer in offers] == ["first-offer", "second-offer"]
+    preferred_filters = []
+    for call in get_catalog_offers.call_args_list[:2]:
+        provider = call.kwargs["catalog"].providers[0]
+        preferred_filters.append(provider.extra_filters["machine_id"])
+    assert preferred_filters == [{"eq": 901}, {"eq": 902}]

@@ -279,6 +279,7 @@ async def get_project_backends_with_models(project: ProjectModel) -> List[Backen
                 cached_backend is not None
                 and cached_backend[0].config == backend_model.config
                 and cached_backend[0].auth == backend_model.auth
+                and cached_backend[0].preferences == backend_model.preferences
             ):
                 continue
             configurator = get_configurator(backend_model.type)
@@ -320,6 +321,7 @@ async def get_project_backends_with_models(project: ProjectModel) -> List[Backen
                         )
                 else:
                     backend, duration = result
+                    _apply_backend_preferences(backend_model, backend)
                     project_backends[backend_model.type] = (backend_model, backend)
                     initialized_results.append(f"{backend_model.type.value}={duration:.1f}s")
             logger.debug(
@@ -335,6 +337,47 @@ async def get_project_backends_with_models(project: ProjectModel) -> List[Backen
         # This is ok since the only effect is that project's cache gets restored.
         _BACKENDS_CACHE[key] = project_backends
     return list(project_backends.values())
+
+
+
+
+def _get_backend_preferences(backend_model: BackendModel) -> dict:
+    if backend_model.preferences is None:
+        return {}
+    try:
+        preferences = json.loads(backend_model.preferences)
+    except (TypeError, ValueError):
+        logger.warning("Ignoring invalid preferences for backend %s", backend_model.type.value)
+        return {}
+    if not isinstance(preferences, dict):
+        logger.warning("Ignoring non-object preferences for backend %s", backend_model.type.value)
+        return {}
+    return preferences
+
+
+def _apply_backend_preferences(backend_model: BackendModel, backend: Backend) -> None:
+    if backend_model.type != BackendType.VASTAI:
+        return
+    from dstack._internal.core.backends.vastai.backend import VastAIBackend
+
+    if not isinstance(backend, VastAIBackend):
+        return
+    raw_ids = _get_backend_preferences(backend_model).get("preferred_machine_ids", [])
+    ids: list[int] = []
+    if isinstance(raw_ids, list):
+        for raw_id in raw_ids:
+            try:
+                machine_id = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            if machine_id > 0 and machine_id not in ids:
+                ids.append(machine_id)
+    backend.config.preferred_machine_ids = ids
+
+
+async def invalidate_project_backend_cache(project_id: UUID) -> None:
+    async with _get_project_cache_lock(project_id):
+        _BACKENDS_CACHE.pop(project_id, None)
 
 
 async def _get_backend_tracked(

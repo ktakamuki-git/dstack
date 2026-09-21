@@ -38,6 +38,7 @@ async def test_import_vast_instance_registers_reuse_only_external_capacity(
         "ssh_port": 2222,
         "geolocation": "JP Japan",
         "dph_total": 0.42,
+        "machine_id": 777,
     }
     api_client = Mock()
     api_client.get_instance.return_value = provider_instance
@@ -56,6 +57,11 @@ async def test_import_vast_instance_registers_reuse_only_external_capacity(
             "_probe_instance_type_with_retry",
             Mock(return_value=instance_type),
         ),
+        patch.object(
+            vast_import.vast_preferences_services,
+            "add_preferred_machine",
+            AsyncMock(return_value=[777]),
+        ) as add_preferred_machine,
     ):
         fleet = await vast_import.import_vast_instance(
             session=session,
@@ -68,6 +74,9 @@ async def test_import_vast_instance_registers_reuse_only_external_capacity(
 
     api_client.get_instance.assert_called_once_with(12345)
     api_client.attach_ssh_key.assert_called_once_with(12345, project.ssh_public_key.strip())
+    add_preferred_machine.assert_awaited_once_with(
+        session=session, project=project, machine_id=777
+    )
     assert fleet.name == "manual-vast"
 
     fleet_model = (

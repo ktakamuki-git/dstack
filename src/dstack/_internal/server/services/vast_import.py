@@ -34,6 +34,7 @@ from dstack._internal.server.services import backends as backends_services
 from dstack._internal.server.services import events
 from dstack._internal.server.services import fleets as fleets_services
 from dstack._internal.server.services import instances as instances_services
+from dstack._internal.server.services import vast_preferences as vast_preferences_services
 from dstack._internal.server.services.external_runner import (
     build_external_runner_backend_data,
     get_external_runner_provider_instance_id,
@@ -85,6 +86,7 @@ async def import_vast_instance(
     if not provider_instance:
         raise ServerClientError(f"Vast.ai instance {instance_id} was not found")
 
+    machine_id = _get_machine_id(provider_instance)
     status = str(provider_instance.get("actual_status") or "unknown").lower()
     if status != "running":
         raise ServerClientError(
@@ -192,11 +194,16 @@ async def import_vast_instance(
         busy_blocks=0,
     )
     session.add(instance_model)
+    if machine_id is not None:
+        await vast_preferences_services.add_preferred_machine(
+            session=session, project=project, machine_id=machine_id
+        )
     events.emit(
         session=session,
         message=(
             f"Imported existing Vast.ai instance {instance_id}. "
-            "The provider instance remains externally owned and is not destroyed with the fleet."
+            + (f"Machine {machine_id} was added to preferred Vast.ai machines. " if machine_id else "")
+            + "The provider instance remains externally owned and is not destroyed with the fleet."
         ),
         actor=events.UserActor.from_user(user),
         targets=[
@@ -232,6 +239,15 @@ async def _check_not_already_imported(
         jpd = instances_services.get_instance_provisioning_data(instance_model)
         if get_external_runner_provider_instance_id(jpd) == wanted:
             raise ServerClientError(f"Vast.ai instance {instance_id} is already imported")
+
+
+def _get_machine_id(provider_instance: dict) -> Optional[int]:
+    raw = provider_instance.get("machine_id")
+    try:
+        machine_id = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return machine_id if machine_id > 0 else None
 
 
 def _get_ssh_endpoint(provider_instance: dict, instance_id: int) -> tuple[str, int]:

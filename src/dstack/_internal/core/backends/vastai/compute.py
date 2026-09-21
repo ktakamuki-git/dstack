@@ -56,7 +56,9 @@ class VastAICompute(
         self.config = config
         self.api_client = VastAIAPIClient(config.creds.api_key)
 
-    def _make_catalog(self, options: VastAIProfileOptions) -> gpuhunt.Catalog:
+    def _make_catalog(
+        self, options: VastAIProfileOptions, preferred_machine_id: Optional[int] = None
+    ) -> gpuhunt.Catalog:
         filters = {
             "direct_port_count": {"gte": 1},
             "reliability2": {
@@ -69,6 +71,8 @@ class VastAICompute(
             "cuda_max_good": {"gte": 12.8},
             "compute_cap": {"gte": 600},
         }
+        if preferred_machine_id is not None:
+            filters["machine_id"] = {"eq": preferred_machine_id}
         if options.min_score is not None:
             filters["score"] = {"gte": options.min_score}
         match options.offer_order or VASTAI_DEFAULT_OFFER_ORDER:
@@ -90,18 +94,19 @@ class VastAICompute(
         )
         return catalog
 
-    def get_offers_by_requirements(
-        self, requirements: Requirements, full_offers: bool, unallocated_resources: bool
+    def _get_offers_from_catalog(
+        self,
+        requirements: Requirements,
+        vastai_options: VastAIProfileOptions,
+        preferred_machine_id: Optional[int] = None,
     ) -> List[InstanceOfferWithAvailability]:
-        vastai_options = (
-            get_backend_profile_options(requirements.backend_options, VastAIProfileOptions)
-            or VastAIProfileOptions()
-        )
         offers = get_catalog_offers(
             backend=BackendType.VASTAI,
             locations=self.config.regions or None,
             requirements=requirements,
-            catalog=self._make_catalog(vastai_options),
+            catalog=self._make_catalog(
+                vastai_options, preferred_machine_id=preferred_machine_id
+            ),
         )
         offers = [
             offer.with_availability(
@@ -110,9 +115,49 @@ class VastAICompute(
             )
             for offer in offers
         ]
+        if preferred_machine_id is not None:
+            for offer in offers:
+                offer.backend_data = {
+                    **offer.backend_data,
+                    "preferred_machine_id": preferred_machine_id,
+                }
         if (vastai_options.offer_order or VASTAI_DEFAULT_OFFER_ORDER) == VastAIOfferOrder.PRICE:
             offers = sorted(offers, key=lambda o: o.price)
         return offers
+
+    def get_offers_by_requirements(
+        self, requirements: Requirements, full_offers: bool, unallocated_resources: bool
+    ) -> List[InstanceOfferWithAvailability]:
+        vastai_options = (
+            get_backend_profile_options(requirements.backend_options, VastAIProfileOptions)
+            or VastAIProfileOptions()
+        )
+        preferred_offers: list[InstanceOfferWithAvailability] = []
+        preferred_offer_ids: set[tuple[str, bool]] = set()
+        for machine_id in dict.fromkeys(self.config.preferred_machine_ids):
+            for offer in self._get_offers_from_catalog(
+                requirements=requirements,
+                vastai_options=vastai_options,
+                preferred_machine_id=machine_id,
+            ):
+                offer_id = (offer.instance.name, offer.instance.resources.spot)
+                if offer_id in preferred_offer_ids:
+                    continue
+                preferred_offer_ids.add(offer_id)
+                preferred_offers.append(offer)
+
+        marketplace_offers = self._get_offers_from_catalog(
+            requirements=requirements,
+            vastai_options=vastai_options,
+        )
+        if not preferred_offer_ids:
+            return marketplace_offers
+
+        return preferred_offers + [
+            offer
+            for offer in marketplace_offers
+            if (offer.instance.name, offer.instance.resources.spot) not in preferred_offer_ids
+        ]
 
     def run_job(
         self,
@@ -221,6 +266,7 @@ class VastAICompute(
 
 class VastAIOfferBackendData(CoreModel):
     min_bid: float | None = None
+    preferred_machine_id: int | None = None
 
 
 def _terminate_instance_with_rate_limit_retry(

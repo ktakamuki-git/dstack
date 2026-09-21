@@ -331,6 +331,8 @@ class BackendModel(BaseModel):
     """`source_auth` stores the original sensitive backend config from user input
     before configurators materialize defaults or generated values.
     """
+    preferences: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    """Non-sensitive runtime preferences managed separately from backend config.yml."""
 
     gateways: Mapped[List["GatewayModel"]] = relationship(back_populates="backend")
 

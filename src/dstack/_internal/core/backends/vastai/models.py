@@ -78,6 +78,9 @@ class VastAIStoredConfig(VastAIBackendConfig):
 
 class VastAIConfig(VastAIStoredConfig):
     creds: AnyVastAICreds
+    # Runtime preference populated from BackendModel.preferences. It is intentionally
+    # separate from VastAIStoredConfig so config.yml updates cannot erase it.
+    preferred_machine_ids: List[Annotated[int, Field(gt=0)]] = Field(default_factory=list)
 
     @property
     def allow_community_cloud(self) -> bool:
